@@ -1,0 +1,51 @@
+name: Build Frostveil
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find the Gradle project folder
+        id: find
+        run: |
+          # Works even if the files were pushed inside a subfolder.
+          SETTINGS=$(find . -maxdepth 4 -name settings.gradle -not -path "./.git/*" | head -n 1)
+          if [ -z "$SETTINGS" ]; then
+            echo "No settings.gradle found. Push the CONTENTS of Frostveil src.zip to the repository root."
+            find . -maxdepth 3 -not -path "./.git/*" | head -50
+            exit 1
+          fi
+          DIR=$(dirname "$SETTINGS")
+          echo "Project folder: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.1.1
+
+      - name: Build jar
+        working-directory: ${{ steps.find.outputs.dir }}
+        run: gradle build --no-daemon --stacktrace
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: frostveil-jar
+          path: |
+            ${{ steps.find.outputs.dir }}/build/libs/*.jar
+            !${{ steps.find.outputs.dir }}/build/libs/*-sources.jar
+          if-no-files-found: error
