@@ -2,7 +2,6 @@ name: Build Frostveil
 
 on:
   push:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -12,14 +11,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find the Gradle project folder
+      - name: Find or unzip the project
         id: find
         run: |
-          # Works even if the files were pushed inside a subfolder.
+          # 1) already unzipped somewhere?  2) otherwise unzip the zip that is in the repo
           SETTINGS=$(find . -maxdepth 4 -name settings.gradle -not -path "./.git/*" | head -n 1)
           if [ -z "$SETTINGS" ]; then
-            echo "No settings.gradle found. Push the CONTENTS of Frostveil src.zip to the repository root."
-            find . -maxdepth 3 -not -path "./.git/*" | head -50
+            ZIP=$(find . -maxdepth 2 -iname "*.zip" -not -path "./.git/*" | head -n 1)
+            if [ -z "$ZIP" ]; then
+              echo "No settings.gradle and no .zip found in the repository. Upload 'Frostveil src.zip' to the repo root."
+              find . -maxdepth 3 -not -path "./.git/*" | head -50
+              exit 1
+            fi
+            echo "Unzipping: $ZIP"
+            mkdir -p _project
+            unzip -q -o "$ZIP" -d _project
+            SETTINGS=$(find _project -maxdepth 4 -name settings.gradle | head -n 1)
+          fi
+          if [ -z "$SETTINGS" ]; then
+            echo "The zip does not contain settings.gradle"
+            find _project -maxdepth 3 | head -50
             exit 1
           fi
           DIR=$(dirname "$SETTINGS")
